@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { autoSubscribe, jsonEqual, logAction, reduxDevtools } from '../src/index.js';
 
 describe('runtime helpers', () => {
-  it('returns the store value unchanged from autoSubscribe', () => {
-    const store = { count: 1 };
-    expect(autoSubscribe(store)).toBe(store);
+  it('throws when autoSubscribe reaches runtime without its Vite transform', () => {
+    const store = (() => ({ count: 1 })) as never;
+    expect(() => autoSubscribe(store)).toThrow(
+      "better-zustand's 'autoSubscribe' plugin isn't configured properly",
+    );
   });
 
   it('returns the state creator unchanged from reduxDevtools', () => {

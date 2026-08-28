@@ -39,7 +39,7 @@ export default defineConfig({
 ```ts
 import { autoSubscribe } from 'better-zustand';
 
-const { count, increment } = autoSubscribe(useCounterStore());
+const { count, increment } = autoSubscribe(useCounterStore);
 ```
 
 At build time this becomes one selector subscription per field:
@@ -49,7 +49,57 @@ const count = useCounterStore((state) => state.count);
 const increment = useCounterStore((state) => state.increment);
 ```
 
-The marker is a runtime no-op, so the Vite plugin must be enabled. Object aliases and default values are supported; rest properties are ignored.
+Pass a selector as the second argument to destructure a nested value. Each field receives an independent subscription with JSON serialization equality by default:
+
+```ts
+const { id, title } = autoSubscribe(
+  useCounterStore,
+  (state) => state.testCase,
+);
+```
+
+This is transformed into the equivalent of:
+
+```ts
+import { useStoreWithEqualityFn } from 'zustand/traditional';
+
+const id = useStoreWithEqualityFn(
+  useCounterStore,
+  (state) => state.testCase.id,
+  (a, b) => JSON.stringify(a) === JSON.stringify(b),
+);
+const title = useStoreWithEqualityFn(
+  useCounterStore,
+  (state) => state.testCase.title,
+  (a, b) => JSON.stringify(a) === JSON.stringify(b),
+);
+```
+
+Named selectors and member-expression selectors are supported. Pass a third argument to replace the JSON comparison for every generated field:
+
+```ts
+const { title } = autoSubscribe(
+  useCounterStore,
+  selectTestCase,
+  (previous, next) => previous.localeCompare(next) === 0,
+);
+```
+
+JSON comparison is useful for deeply nested JSON-compatible values, but serialization has a runtime cost and depends on stable key order. Prefer a custom comparer for hot paths or values that are not JSON-compatible.
+
+`autoSubscribe` must receive the hook itself. The former `autoSubscribe(useCounterStore())` syntax is unsupported. If the marker reaches runtime, it throws an error explaining that the Vite plugin is not configured.
+
+Genuine Zustand bound stores support all modes. A custom React hook that merely mimics a bound-store call signature may be cast to `UseZustandStore<TState>` for root destructuring only:
+
+```ts
+import { autoSubscribe, type UseZustandStore } from 'better-zustand';
+
+const { count } = autoSubscribe(
+  useContextStore as UseZustandStore<ContextStoreState>,
+);
+```
+
+Selector and custom-comparer modes pass the first argument to `useStoreWithEqualityFn`, so they require real `StoreApi` methods such as `getState` and `subscribe`; a TypeScript cast does not add those methods at runtime. Object aliases and default values are supported, while rest properties are ignored.
 
 ## Name stores in Redux DevTools
 

@@ -26,7 +26,7 @@ const cases = [
   {
     name: 'zustandAutoSubscribePlugin',
     plugin: zustandAutoSubscribePlugin,
-    triggeringCode: 'const { count } = autoSubscribe(useMyStore());',
+    triggeringCode: 'const { count } = autoSubscribe(useMyStore);',
   },
   {
     name: 'zustandLogActionPlugin',

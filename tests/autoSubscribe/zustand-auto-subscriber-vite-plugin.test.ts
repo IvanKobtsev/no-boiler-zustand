@@ -1,149 +1,202 @@
-import { describe, expect, it } from 'vitest';
-import { parse } from '@babel/parser';
 import { generate } from '@babel/generator';
+import { parse } from '@babel/parser';
+import { describe, expect, it } from 'vitest';
 import { zustandAutoSubscribePlugin } from '../../src/autoSubscribe/zustand-auto-subscriber-vite-plugin.js';
 
 describe('zustandAutoSubscribePlugin', () => {
   it.each(transformCases)('$name', async ({ input, expected }) => {
     const output = await transformCode(input);
-
     expect(output).not.toBeNull();
     expect(normalize(output!)).toBe(normalize(expected));
   });
 
   it.each(untouchedCases)('returns null for $name', async ({ input, id }) => {
-    const output = await transformCode(input, id);
-
-    expect(output).toBeNull();
+    expect(await transformCode(input, id)).toBeNull();
   });
 });
 
-const transformCases: { name: string; input: string; expected: string }[] = [
+const transformCases = [
   {
-    name: 'expands a shorthand destructure into individual selectors',
-    input: `
-      const { count, name } = autoSubscribe(useMyStore());
-    `,
+    name: 'expands root fields from a hook reference',
+    input: `const { count, name } = autoSubscribe(useMyStore);`,
     expected: `
-      const count = useMyStore((s) => s.count);
-      const name = useMyStore((s) => s.name);
+      const count = useMyStore((state) => state.count);
+      const name = useMyStore((state) => state.name);
     `,
   },
   {
-    name: 'uses the alias as the variable name for a renamed property',
+    name: 'supports casts used by hook-compatible wrappers',
     input: `
-      const { count: total } = autoSubscribe(useMyStore());
+      const { count } = autoSubscribe(
+        useMyStore as UseZustandStore<MyState>,
+      );
     `,
     expected: `
-      const total = useMyStore((s) => s.count);
+      const count = (useMyStore as UseZustandStore<MyState>)(
+        (state) => state.count,
+      );
     `,
   },
   {
-    name: 'uses the binding name for a property with a default value',
-    input: `
-      const { count = 0 } = autoSubscribe(useMyStore());
-    `,
+    name: 'preserves aliases, defaults, declaration kind, and source order',
+    input: `let { id: value = 'none', title } = autoSubscribe(useMyStore);`,
     expected: `
-      const count = useMyStore((s) => s.count);
+      let value = useMyStore((state) => state.id);
+      let title = useMyStore((state) => state.title);
     `,
   },
   {
-    name: 'uses the binding name for a renamed property with a default value',
-    input: `
-      const { count: total = 0 } = autoSubscribe(useMyStore());
-    `,
-    expected: `
-      const total = useMyStore((s) => s.count);
-    `,
+    name: 'skips rest properties',
+    input: `const { count, ...rest } = autoSubscribe(useMyStore);`,
+    expected: `const count = useMyStore((state) => state.count);`,
   },
   {
-    name: 'preserves the "let" declaration kind',
-    input: `
-      let { x } = autoSubscribe(useMyStore());
-    `,
-    expected: `
-      let x = useMyStore((s) => s.x);
-    `,
-  },
-  {
-    name: 'silently skips rest elements and only expands regular properties',
-    input: `
-      const { count, ...rest } = autoSubscribe(useMyStore());
-    `,
-    expected: `
-      const count = useMyStore((s) => s.count);
-    `,
-  },
-  {
-    name: 'leaves unrelated declarations untouched',
-    input: `
-      const plain = 42;
-      const { value } = autoSubscribe(useMyStore());
-    `,
+    name: 'preserves unrelated declarations in a shared statement',
+    input: `const plain = 42, { count } = autoSubscribe(useMyStore);`,
     expected: `
       const plain = 42;
-      const value = useMyStore((s) => s.value);
+      const count = useMyStore((state) => state.count);
     `,
   },
   {
-    name: 'expands declarations that share a statement with an unrelated one',
+    name: 'composes an inline selector and injects deep equality',
     input: `
-      const plain = 42,
-        { value } = autoSubscribe(useMyStore());
+      const { id, title } = autoSubscribe(
+        useMyStore,
+        (state) => state.testCase,
+      );
     `,
     expected: `
-      const plain = 42;
-      const value = useMyStore((s) => s.value);
+      import { useStoreWithEqualityFn } from 'zustand/traditional';
+      const id = useStoreWithEqualityFn(
+        useMyStore,
+        (state) => ((state) => state.testCase)(state).id,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
+      const title = useStoreWithEqualityFn(
+        useMyStore,
+        (state) => ((state) => state.testCase)(state).title,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
+    `,
+  },
+  {
+    name: 'composes a named selector and custom comparer',
+    input: `
+      const { title } = autoSubscribe(
+        stores.counter,
+        selectors.testCase,
+        customEquality,
+      );
+    `,
+    expected: `
+      import { useStoreWithEqualityFn } from 'zustand/traditional';
+      const title = useStoreWithEqualityFn(
+        stores.counter,
+        (state) => selectors.testCase(state).title,
+        customEquality,
+      );
+    `,
+  },
+  {
+    name: 'merges into an existing traditional import',
+    input: `
+      import { createWithEqualityFn } from 'zustand/traditional';
+      const { title } = autoSubscribe(useMyStore, selectTestCase);
+    `,
+    expected: `
+      import {
+        createWithEqualityFn,
+        useStoreWithEqualityFn,
+      } from 'zustand/traditional';
+      const title = useStoreWithEqualityFn(
+        useMyStore,
+        (state) => selectTestCase(state).title,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
+    `,
+  },
+  {
+    name: 'reuses an aliased traditional import',
+    input: `
+      import {
+        useStoreWithEqualityFn as useStoreEq,
+      } from 'zustand/traditional';
+      const { title } = autoSubscribe(useMyStore, selectTestCase);
+    `,
+    expected: `
+      import {
+        useStoreWithEqualityFn as useStoreEq,
+      } from 'zustand/traditional';
+      const title = useStoreEq(
+        useMyStore,
+        (state) => selectTestCase(state).title,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
+    `,
+  },
+  {
+    name: 'avoids a local equality hook name collision',
+    input: `
+      const useStoreWithEqualityFn = localHelper;
+      const { title } = autoSubscribe(useMyStore, selectTestCase);
+    `,
+    expected: `
+      import {
+        useStoreWithEqualityFn as _useStoreWithEqualityFn,
+      } from 'zustand/traditional';
+      const useStoreWithEqualityFn = localHelper;
+      const title = _useStoreWithEqualityFn(
+        useMyStore,
+        (state) => selectTestCase(state).title,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
     `,
   },
 ];
 
 const untouchedCases: { name: string; input: string; id?: string }[] = [
+  { name: 'a non-code file', id: 'file.css', input: 'autoSubscribe(store)' },
+  { name: 'a file without autoSubscribe', input: 'const value = store();' },
   {
-    name: 'a non-code file',
-    id: 'file.css',
-    input: 'const a = 1;',
+    name: 'the removed invoked-hook syntax',
+    input: 'const { count } = autoSubscribe(useMyStore());',
   },
   {
-    name: 'a file that does not reference autoSubscribe',
-    input: `
-      const { count } = useMyStore();
-    `,
+    name: 'a non-object binding',
+    input: 'const count = autoSubscribe(useMyStore);',
   },
   {
-    name: 'a destructure whose left-hand side is not an object pattern',
-    input: `
-      const count = autoSubscribe(useMyStore());
-    `,
+    name: 'a missing store hook',
+    input: 'const { count } = autoSubscribe();',
   },
   {
-    name: 'a destructure that is not initialised by autoSubscribe',
-    input: `
-      const { count } = otherHelper(useMyStore());
-    `,
+    name: 'a literal store value',
+    input: 'const { count } = autoSubscribe({ count: 1 });',
   },
   {
-    name: 'an autoSubscribe argument that is not a call expression',
-    input: `
-      const { count } = autoSubscribe(myStore);
-    `,
+    name: 'a selector without a callable store',
+    input: 'const { count } = autoSubscribe(null, selectValue);',
+  },
+  {
+    name: 'a non-callable selector',
+    input: 'const { count } = autoSubscribe(useMyStore, 42);',
+  },
+  {
+    name: 'a non-callable custom comparer',
+    input: 'const { count } = autoSubscribe(useMyStore, selectValue, false);',
+  },
+  {
+    name: 'too many arguments',
+    input: 'const { count } = autoSubscribe(store, select, equal, extra);',
   },
 ];
 
-/**
- * Re-prints code from its AST, so that expected snippets can be written in a
- * readable style: indentation, line breaks and quote style don't affect the
- * comparison, only the code itself does.
- *
- * Parsing also throws a SyntaxError on unparseable code, which makes the
- * theories resilient against transform bugs producing broken output.
- */
 function normalize(code: string) {
   const ast = parse(code, {
     sourceType: 'module',
     plugins: ['typescript', 'jsx'],
   });
-
   return generate(ast, { compact: true, comments: false }).code.replace(
     /"/g,
     "'",
@@ -151,23 +204,10 @@ function normalize(code: string) {
 }
 
 async function transformCode(code: string, id = 'component.tsx') {
-  const plugin = zustandAutoSubscribePlugin();
-  const transform = plugin.transform;
-
-  if (!transform) {
-    throw new Error('Transform hook is not defined');
-  }
-
-  // @ts-ignore
+  const transform = zustandAutoSubscribePlugin().transform;
+  if (!transform) throw new Error('Transform hook is not defined');
+  // @ts-ignore Vite supports callable transform hooks.
   const result = await transform.call({}, code, id);
-
-  if (result === null) {
-    return null;
-  }
-
-  if (typeof result === 'string') {
-    return result;
-  }
-
+  if (result === null || typeof result === 'string') return result;
   return result.code;
 }
