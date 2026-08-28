@@ -1,17 +1,17 @@
-# better-zustand
+# no-boiler-zustand
 
 > [!IMPORTANT]
-> **Vite only:** `better-zustand` relies on custom Vite transforms and does not work with Webpack, Parcel, esbuild-only setups, or other build tools.
+> **Vite only:** `no-boiler-zustand` relies on custom Vite transforms and does not work with Webpack, Parcel, esbuild-only setups, or other build tools.
 
 Build-time Vite helpers for concise Zustand selectors, Redux DevTools integration, and action names without sacrificing store type inference.
 
 ## Install
 
 ```sh
-npm install better-zustand
+npm install no-boiler-zustand
 ```
 
-`better-zustand` requires Node.js 20+, Vite 5–7, and Zustand 5. Vite is required even when you only import the marker helpers, because those helpers depend on the corresponding build-time transforms.
+`no-boiler-zustand` requires Node.js 20+, Vite 5–7, and Zustand 5. Vite is required even when you only import the marker helpers, because those helpers depend on the corresponding build-time transforms.
 
 ## Configure Vite
 
@@ -23,7 +23,7 @@ import {
   zustandAutoSubscribePlugin,
   zustandDevtoolsPlugin,
   zustandLogActionPlugin,
-} from 'better-zustand/vite';
+} from 'no-boiler-zustand/vite';
 
 export default defineConfig({
   plugins: [
@@ -37,7 +37,7 @@ export default defineConfig({
 ## Automatically subscribe to fields
 
 ```ts
-import { autoSubscribe } from 'better-zustand';
+import { autoSubscribe } from 'no-boiler-zustand';
 
 const { count, increment } = autoSubscribe(useCounterStore);
 ```
@@ -92,7 +92,7 @@ JSON comparison is useful for deeply nested JSON-compatible values, but serializ
 Genuine Zustand bound stores support all modes. A custom React hook that merely mimics a bound-store call signature may be cast to `UseZustandStore<TState>` for root destructuring only:
 
 ```ts
-import { autoSubscribe, type UseZustandStore } from 'better-zustand';
+import { autoSubscribe, type UseZustandStore } from 'no-boiler-zustand';
 
 const { count } = autoSubscribe(
   useContextStore as UseZustandStore<ContextStoreState>,
@@ -105,7 +105,7 @@ Selector and custom-comparer modes pass the first argument to `useStoreWithEqual
 
 ```ts
 import { create } from 'zustand';
-import { reduxDevtools } from 'better-zustand';
+import { reduxDevtools } from 'no-boiler-zustand';
 
 const useCounterStore = create<CounterState>()(
   reduxDevtools((set) => ({
@@ -122,7 +122,7 @@ The plugin wraps the state creator with Zustand's `devtools` middleware and deri
 Inside a store action, wrap a `set` call with `logAction`:
 
 ```ts
-import { logAction } from 'better-zustand';
+import { logAction } from 'no-boiler-zustand';
 
 const useCounterStore = create<CounterState>()(
   reduxDevtools((set) => ({
@@ -138,7 +138,7 @@ The transform adds the inferred names `increment` and `reset/confirmed` to Zusta
 ## Equality helper
 
 ```ts
-import { jsonEqual } from 'better-zustand';
+import { jsonEqual } from 'no-boiler-zustand';
 
 jsonEqual({ values: [1, 2] }, { values: [1, 2] }); // true
 ```

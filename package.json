@@ -1,5 +1,5 @@
 {
-  "name": "better-zustand",
+  "name": "no-boiler-zustand",
   "version": "0.1.0",
   "description": "Vite-only build-time helpers that make Zustand stores more concise and observable.",
   "type": "module",

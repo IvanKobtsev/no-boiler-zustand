@@ -18,7 +18,7 @@ export function reduxDevtools<T>(
   createCallbackResult: T,
   _discriminator?: string,
 ): T {
-  return createCallbackResult;
+  throw new Error(
+    "no-boiler-zustand's 'zustandDevtoolsPlugin' isn't configured properly",
+  );
 }
-
-// TODO: use _discriminator once PR 28327 is merged to distinguish TestCaseParametersStore instances

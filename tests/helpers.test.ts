@@ -5,17 +5,21 @@ describe('runtime helpers', () => {
   it('throws when autoSubscribe reaches runtime without its Vite transform', () => {
     const store = (() => ({ count: 1 })) as never;
     expect(() => autoSubscribe(store)).toThrow(
-      "better-zustand's 'autoSubscribe' plugin isn't configured properly",
+      "no-boiler-zustand's 'zustandAutoSubscribePlugin' isn't configured properly",
     );
   });
 
-  it('returns the state creator unchanged from reduxDevtools', () => {
+  it('throws when reduxDevtools reaches runtime without its Vite transform', () => {
     const creator = () => ({ count: 1 });
-    expect(reduxDevtools(creator)).toBe(creator);
+    expect(() => reduxDevtools(creator)).toThrow(
+      "no-boiler-zustand's 'zustandDevtoolsPlugin' isn't configured properly",
+    );
   });
 
-  it('keeps logAction as a runtime no-op', () => {
-    expect(logAction(undefined, 'increment')).toBeUndefined();
+  it('throws when logAction reaches runtime without its Vite transform', () => {
+    expect(() => logAction(undefined, 'increment')).toThrow(
+      "no-boiler-zustand's 'zustandLogActionPlugin' isn't configured properly",
+    );
   });
 
   it('compares JSON-equivalent values', () => {

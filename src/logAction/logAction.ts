@@ -25,4 +25,8 @@
  * <b>Note:</b> This function is a no-op at runtime and is meant to be transformed by a build-time plugin.
  * See {@link zustandLogActionPlugin} for the implementation.
  */
-export function logAction(set: void, actionName?: string) {}
+export function logAction(set: void, actionName?: string) {
+  throw new Error(
+    "no-boiler-zustand's 'zustandLogActionPlugin' isn't configured properly",
+  );
+}
