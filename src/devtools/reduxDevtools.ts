@@ -19,6 +19,6 @@ export function reduxDevtools<T>(
   _discriminator?: string,
 ): T {
   throw new Error(
-    "no-boiler-zustand's 'reduxDevtools' reached runtime without being transformed. Make sure 'zustandDevtoolsPlugin' is configured in Vite and that the call uses a supported expression.",
+    "no-boiler-zustand's 'reduxDevtools' reached runtime without being transformed. Make sure 'zustandDevtoolsPlugin' is configured in Vite and processes this file.",
   );
 }

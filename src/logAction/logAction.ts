@@ -27,6 +27,6 @@
  */
 export function logAction(set: void, actionName?: string) {
   throw new Error(
-    "no-boiler-zustand's 'logAction' reached runtime without being transformed. Make sure 'zustandLogActionPlugin' is configured in Vite and that the call uses a supported expression.",
+    "no-boiler-zustand's 'logAction' reached runtime without being transformed. Make sure 'zustandLogActionPlugin' is configured in Vite and processes this file.",
   );
 }

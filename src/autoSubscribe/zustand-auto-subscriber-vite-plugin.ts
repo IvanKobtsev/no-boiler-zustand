@@ -1,5 +1,6 @@
 import { transformSync } from '@babel/core';
 import type { Plugin } from 'vite';
+import { assertNoUntransformedHelperCalls } from '../untransformed-helper-error.js';
 
 const traditionalModule = 'zustand/traditional';
 const equalityHookExport = 'useStoreWithEqualityFn';
@@ -25,6 +26,14 @@ function isCallableExpression(node: any): boolean {
     return isCallableExpression(node.expression);
   }
   return false;
+}
+
+function isStoreExpression(node: any): boolean {
+  return (
+    isCallableExpression(node) ||
+    node?.type === 'CallExpression' ||
+    node?.type === 'OptionalCallExpression'
+  );
 }
 
 function getPropertyBinding(prop: any) {
@@ -192,6 +201,10 @@ export function zustandAutoSubscribePlugin(): Plugin {
                     if (didUseEqualityHook && shouldAddEqualityHookImport) {
                       addEqualityHookImport(programPath, equalityHookName);
                     }
+                    assertNoUntransformedHelperCalls(
+                      programPath,
+                      'autoSubscribe',
+                    );
                   },
                 },
                 VariableDeclaration(path: any) {
@@ -218,7 +231,7 @@ export function zustandAutoSubscribePlugin(): Plugin {
                       args.length === 1 && isCallableExpression(args[0]);
                     const isSelectorMode =
                       (args.length === 2 || args.length === 3) &&
-                      isCallableExpression(args[0]) &&
+                      isStoreExpression(args[0]) &&
                       isCallableExpression(args[1]) &&
                       (args.length !== 3 || isCallableExpression(args[2]));
                     if (!isRootMode && !isSelectorMode) {

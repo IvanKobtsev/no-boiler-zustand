@@ -87,7 +87,7 @@ const { title } = autoSubscribe(
 
 JSON comparison is useful for deeply nested JSON-compatible values, but serialization has a runtime cost and depends on stable key order. Prefer a custom comparer for hot paths or values that are not JSON-compatible.
 
-`autoSubscribe` must receive the hook itself. The former `autoSubscribe(useCounterStore())` syntax is unsupported. If the marker reaches runtime, it throws an error explaining that the Vite plugin is not configured.
+`autoSubscribe` must receive the hook itself in root mode. The former `autoSubscribe(useCounterStore())` syntax is unsupported. When a configured Vite plugin finds a marker call it cannot transform, it fails the build with the source file, exact line, and a code frame. If the plugin is not configured at all, the marker throws if it reaches runtime.
 
 Genuine Zustand bound stores support all modes. A custom React hook that merely mimics a bound-store call signature may be cast to `UseZustandStore<TState>` for root destructuring only:
 

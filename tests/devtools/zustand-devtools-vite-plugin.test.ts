@@ -16,6 +16,20 @@ describe('zustandDevtoolsPlugin', () => {
 
     expect(output).toBeNull();
   });
+
+  it.each(rejectedCases)('rejects the build for $name', async ({ input }) => {
+    await expect(transformCode(input)).rejects.toThrow(
+      /could not transform 'reduxDevtools' at .*store\.ts:\d+/,
+    );
+  });
+
+  it('reports the exact line of an unsupported call', async () => {
+    await expect(
+      transformCode(
+        'const before = true;\nconst value = reduxDevtools(createStore());',
+      ),
+    ).rejects.toThrow(/store\.ts:2/);
+  });
 });
 
 const transformCases: { name: string; input: string; expected: string }[] = [
@@ -296,6 +310,9 @@ const untouchedCases: { name: string; input: string; id?: string }[] = [
       export const useStore = create()((set) => ({ count: 0 }));
     `,
   },
+];
+
+const rejectedCases: { name: string; input: string }[] = [
   {
     name: 'a reduxDevtools call whose argument is not a curried create',
     input: `

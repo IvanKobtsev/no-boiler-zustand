@@ -83,6 +83,6 @@ export function autoSubscribe<TStoreState, TSelectorReturn>(
   _equalityFn?: (a: any, b: any) => boolean,
 ): TStoreState | TSelectorReturn {
   throw new Error(
-    "no-boiler-zustand's 'autoSubscribe' reached runtime without being transformed. Make sure 'zustandAutoSubscribePlugin' is configured in Vite and that the call uses a supported expression.",
+    "no-boiler-zustand's 'autoSubscribe' reached runtime without being transformed. Make sure 'zustandAutoSubscribePlugin' is configured in Vite and processes this file.",
   );
 }

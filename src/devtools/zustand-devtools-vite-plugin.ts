@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite';
 import { transformSync } from '@babel/core';
+import { assertNoUntransformedHelperCalls } from '../untransformed-helper-error.js';
 
 /**
  * Derives the PascalCase name shown in Redux DevTools from the variable the
@@ -155,6 +156,10 @@ export function zustandDevtoolsPlugin(): Plugin {
 
                 Program: {
                   exit(programPath: any) {
+                    assertNoUntransformedHelperCalls(
+                      programPath,
+                      'reduxDevtools',
+                    );
                     if (!didTransform) return;
 
                     // --- Inject `devtools` import from 'zustand/middleware' ---

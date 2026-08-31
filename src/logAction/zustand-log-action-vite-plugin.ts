@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite';
 import { transformSync } from '@babel/core';
+import { assertNoUntransformedHelperCalls } from '../untransformed-helper-error.js';
 
 function getPropertyKeyName(key: any, computed: boolean): string | null {
   if (computed) return null;
@@ -150,6 +151,11 @@ export function zustandLogActionPlugin(): Plugin {
                   });
 
                   didTransform = true;
+                },
+                Program: {
+                  exit(programPath: any) {
+                    assertNoUntransformedHelperCalls(programPath, 'logAction');
+                  },
                 },
               },
             };

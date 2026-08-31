@@ -16,6 +16,20 @@ describe('zustandLogActionPlugin', () => {
 
     expect(output).toBeNull();
   });
+
+  it.each(rejectedCases)('rejects the build for $name', async ({ input }) => {
+    await expect(transformCode(input)).rejects.toThrow(
+      /could not transform 'logAction' at .*store\.ts:\d+/,
+    );
+  });
+
+  it('reports the exact line of an unsupported call', async () => {
+    await expect(
+      transformCode(
+        'const before = true;\nconst value = logAction(otherCall());',
+      ),
+    ).rejects.toThrow(/store\.ts:2/);
+  });
 });
 
 const transformCases: { name: string; input: string; expected: string }[] = [
@@ -130,6 +144,9 @@ const untouchedCases: { name: string; input: string; id?: string }[] = [
       };
     `,
   },
+];
+
+const rejectedCases: { name: string; input: string }[] = [
   {
     name: 'a logAction argument that is not a set(...) call',
     input: `

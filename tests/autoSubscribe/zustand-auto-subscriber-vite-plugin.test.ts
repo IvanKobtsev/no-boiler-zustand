@@ -13,6 +13,20 @@ describe('zustandAutoSubscribePlugin', () => {
   it.each(untouchedCases)('returns null for $name', async ({ input, id }) => {
     expect(await transformCode(input, id)).toBeNull();
   });
+
+  it.each(rejectedCases)('rejects the build for $name', async ({ input }) => {
+    await expect(transformCode(input)).rejects.toThrow(
+      /could not transform 'autoSubscribe' at .*component\.tsx:\d+/,
+    );
+  });
+
+  it('reports the exact line of an unsupported call', async () => {
+    await expect(
+      transformCode(
+        'const before = true;\nconst value = autoSubscribe(useMyStore);',
+      ),
+    ).rejects.toThrow(/component\.tsx:2/);
+  });
 });
 
 const transformCases = [
@@ -76,6 +90,28 @@ const transformCases = [
       const title = useStoreWithEqualityFn(
         useMyStore,
         (state) => ((state) => state.testCase)(state).title,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
+    `,
+  },
+  {
+    name: 'accepts a store API returned by a function call in selector mode',
+    input: `
+      const { attachments, tags } = autoSubscribe(
+        useTestCaseChangeTrackerStoreApi(),
+        (state) => state.updateTestCaseDto,
+      );
+    `,
+    expected: `
+      import { useStoreWithEqualityFn } from 'zustand/traditional';
+      const attachments = useStoreWithEqualityFn(
+        useTestCaseChangeTrackerStoreApi(),
+        (state) => ((state) => state.updateTestCaseDto)(state).attachments,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
+      const tags = useStoreWithEqualityFn(
+        useTestCaseChangeTrackerStoreApi(),
+        (state) => ((state) => state.updateTestCaseDto)(state).tags,
         (a, b) => JSON.stringify(a) === JSON.stringify(b),
       );
     `,
@@ -185,6 +221,9 @@ const transformCases = [
 const untouchedCases: { name: string; input: string; id?: string }[] = [
   { name: 'a non-code file', id: 'file.css', input: 'autoSubscribe(store)' },
   { name: 'a file without autoSubscribe', input: 'const value = store();' },
+];
+
+const rejectedCases: { name: string; input: string }[] = [
   {
     name: 'the removed invoked-hook syntax',
     input: 'const { count } = autoSubscribe(useMyStore());',
