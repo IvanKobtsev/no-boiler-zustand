@@ -81,6 +81,33 @@ const transformCases = [
     `,
   },
   {
+    name: 'subscribes directly to a selector result',
+    input: `
+      const blockers = autoSubscribe(
+        useNavigationBlockerStore,
+        (state) => state.blockers,
+      );
+    `,
+    expected: `
+      import { useStoreWithEqualityFn } from 'zustand/traditional';
+      const blockers = useStoreWithEqualityFn(
+        useNavigationBlockerStore,
+        (state) => state.blockers,
+        (a, b) => JSON.stringify(a) === JSON.stringify(b),
+      );
+    `,
+  },
+  {
+    name: 'subscribes directly with a custom comparer',
+    input: `
+      const selected = autoSubscribe(store, selectValue, shallow);
+    `,
+    expected: `
+      import { useStoreWithEqualityFn } from 'zustand/traditional';
+      const selected = useStoreWithEqualityFn(store, selectValue, shallow);
+    `,
+  },
+  {
     name: 'composes a named selector and custom comparer',
     input: `
       const { title } = autoSubscribe(

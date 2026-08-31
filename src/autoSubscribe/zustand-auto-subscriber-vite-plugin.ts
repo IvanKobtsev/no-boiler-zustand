@@ -201,7 +201,6 @@ export function zustandAutoSubscribePlugin(): Plugin {
                   for (const declaration of path.node.declarations) {
                     const call = declaration.init;
                     if (
-                      declaration.id?.type !== 'ObjectPattern' ||
                       call?.type !== 'CallExpression' ||
                       call.callee?.type !== 'Identifier' ||
                       call.callee.name !== 'autoSubscribe'
@@ -228,6 +227,42 @@ export function zustandAutoSubscribePlugin(): Plugin {
                         kind: path.node.kind,
                         declarations: [declaration],
                       });
+                      continue;
+                    }
+
+                    if (declaration.id?.type !== 'ObjectPattern') {
+                      if (isSelectorMode && declaration.id?.type === 'Identifier') {
+                        newNodes.push({
+                          type: 'VariableDeclaration',
+                          kind: path.node.kind,
+                          loc: declaration.loc ?? path.node.loc,
+                          declarations: [
+                            {
+                              ...declaration,
+                              init: {
+                                type: 'CallExpression',
+                                callee: {
+                                  type: 'Identifier',
+                                  name: equalityHookName,
+                                },
+                                arguments: [
+                                  args[0],
+                                  args[1],
+                                  args[2] ?? buildJsonEquality(),
+                                ],
+                              },
+                            },
+                          ],
+                        });
+                        changed = true;
+                        didUseEqualityHook = true;
+                      } else {
+                        newNodes.push({
+                          type: 'VariableDeclaration',
+                          kind: path.node.kind,
+                          declarations: [declaration],
+                        });
+                      }
                       continue;
                     }
 
