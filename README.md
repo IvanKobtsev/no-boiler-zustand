@@ -107,8 +107,8 @@ Selector and custom-comparer modes pass the first argument to `useStoreWithEqual
 import { create } from 'zustand';
 import { reduxDevtools } from 'no-boiler-zustand';
 
-const useCounterStore = create<CounterState>()(
-  reduxDevtools((set) => ({
+const useCounterStore = reduxDevtools(
+  create<CounterState>()((set) => ({
     count: 0,
     increment: () => set((state) => ({ count: state.count + 1 })),
   })),
@@ -117,6 +117,18 @@ const useCounterStore = create<CounterState>()(
 
 The plugin wraps the state creator with Zustand's `devtools` middleware and derives `CounterStore` from the variable name. Pass a second argument such as `reduxDevtools(creator, 'Sidebar')` to produce `[Sidebar] CounterStore`.
 
+A third argument forwards any other `devtools` option:
+
+```ts
+const useCounterStore = reduxDevtools(
+  create<CounterState>()((set) => ({ count: 0 })),
+  'Sidebar',
+  { trace: true, enabled: import.meta.env.DEV },
+);
+```
+
+Object literals are merged into the generated options at build time, any other expression is spread at runtime. `name` is not accepted there, since it is derived from the variable name. Pass `undefined` as the discriminator to use options without one.
+
 ## Name actions
 
 Inside a store action, wrap a `set` call with `logAction`:
@@ -124,8 +136,8 @@ Inside a store action, wrap a `set` call with `logAction`:
 ```ts
 import { logAction } from 'no-boiler-zustand';
 
-const useCounterStore = create<CounterState>()(
-  reduxDevtools((set) => ({
+const useCounterStore = reduxDevtools(
+  create<CounterState>()((set) => ({
     count: 0,
     increment: () => logAction(set({ count: 1 })),
     reset: () => logAction(set({ count: 0 }), 'confirmed'),

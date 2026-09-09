@@ -64,10 +64,48 @@ function buildStoreNameExpression(storeName: string, discriminatorArg: any) {
   };
 }
 
-function buildDevtoolsOptions(storeName: string, discriminatorArg: any) {
+/**
+ * Treats an omitted argument, as well as an explicit "undefined" or "null"
+ * placeholder, as absent. This allows skipping the discriminator while still
+ * passing options: `reduxDevtools(store, undefined, { trace: true })`.
+ */
+function normalizeOptionalArg(arg: any) {
+  if (!arg) return null;
+  if (arg.type === 'NullLiteral') return null;
+  if (arg.type === 'Identifier' && arg.name === 'undefined') return null;
+
+  return arg;
+}
+
+/**
+ * Builds the options object passed to devtools(): the caller's options with the
+ * inferred "name" appended, so that the derived store name always wins.
+ *
+ * Object literals are merged property by property, keeping the output readable;
+ * any other expression is spread at runtime.
+ *
+ * Returns null when there is nothing to pass, in which case devtools() is called
+ * with the state creator alone.
+ */
+function buildDevtoolsOptions(
+  storeName: string | null,
+  discriminatorArg: any,
+  optionsArg: any,
+) {
+  if (!storeName) {
+    return optionsArg ?? null;
+  }
+
+  const inheritedProperties = !optionsArg
+    ? []
+    : optionsArg.type === 'ObjectExpression'
+      ? optionsArg.properties
+      : [{ type: 'SpreadElement', argument: optionsArg }];
+
   return {
     type: 'ObjectExpression',
     properties: [
+      ...inheritedProperties,
       {
         type: 'ObjectProperty',
         computed: false,
@@ -105,7 +143,7 @@ export function zustandDevtoolsPlugin(): Plugin {
             return {
               visitor: {
                 CallExpression(path: any) {
-                  // Match: reduxDevtools(create<T>()(stateCreator), discriminator?)
+                  // Match: reduxDevtools(create<T>()(stateCreator), discriminator?, options?)
                   if (
                     path.node.callee?.type !== 'Identifier' ||
                     path.node.callee.name !== 'reduxDevtools'
@@ -126,13 +164,21 @@ export function zustandDevtoolsPlugin(): Plugin {
                   if (!stateCreatorArgs?.length) return;
 
                   const storeName = getStoreName(path);
-                  const discriminatorArg = path.node.arguments?.[1];
+                  const discriminatorArg = normalizeOptionalArg(
+                    path.node.arguments?.[1],
+                  );
+                  const optionsArg = normalizeOptionalArg(
+                    path.node.arguments?.[2],
+                  );
 
-                  const devtoolsArgs = storeName
-                    ? [
-                        ...stateCreatorArgs,
-                        buildDevtoolsOptions(storeName, discriminatorArg),
-                      ]
+                  const devtoolsOptions = buildDevtoolsOptions(
+                    storeName,
+                    discriminatorArg,
+                    optionsArg,
+                  );
+
+                  const devtoolsArgs = devtoolsOptions
+                    ? [...stateCreatorArgs, devtoolsOptions]
                     : stateCreatorArgs;
 
                   // Transform to: create<T>()(devtools(stateCreator, { name }))

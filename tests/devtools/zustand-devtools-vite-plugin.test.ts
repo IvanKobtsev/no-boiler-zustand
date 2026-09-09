@@ -180,6 +180,97 @@ const transformCases: { name: string; input: string; expected: string }[] = [
     `,
   },
   {
+    name: 'merges literal options with the inferred name',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export const useMyStore = reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        'Left',
+        { trace: true, anonymousActionType: 'unknown' }
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export const useMyStore = create()(
+        devtools((set) => ({ count: 0 }), {
+          trace: true,
+          anonymousActionType: 'unknown',
+          name: '[Left] MyStore',
+        }),
+      );
+    `,
+  },
+  {
+    name: 'skips an explicitly undefined discriminator when options are passed',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export const useMyStore = reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        undefined,
+        { trace: true }
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export const useMyStore = create()(
+        devtools((set) => ({ count: 0 }), { trace: true, name: 'MyStore' }),
+      );
+    `,
+  },
+  {
+    name: 'spreads options which are not an object literal',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export const useMyStore = reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        'Left',
+        sharedDevtoolsOptions
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export const useMyStore = create()(
+        devtools((set) => ({ count: 0 }), {
+          ...sharedDevtoolsOptions,
+          name: '[Left] MyStore',
+        }),
+      );
+    `,
+  },
+  {
+    name: 'passes options through when the store is not assigned to a variable',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export default reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        undefined,
+        { trace: true }
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export default create()(
+        devtools((set) => ({ count: 0 }), { trace: true }),
+      );
+    `,
+  },
+  {
     name: 'omits the devtools options when the store is not assigned to a variable',
     input: `
       import { create } from 'zustand';
