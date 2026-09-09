@@ -1,6 +1,6 @@
 {
   "name": "no-boiler-zustand",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Vite-only build-time helpers that make Zustand stores more concise and observable.",
   "type": "module",
   "license": "MIT",
