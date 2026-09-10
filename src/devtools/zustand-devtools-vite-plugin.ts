@@ -65,9 +65,9 @@ function buildStoreNameExpression(storeName: string, discriminatorArg: any) {
 }
 
 /**
- * Treats an omitted argument, as well as an explicit "undefined" or "null"
- * placeholder, as absent. This allows skipping the discriminator while still
- * passing options: `reduxDevtools(store, undefined, { trace: true })`.
+ * Treats an omitted value, as well as an explicit "undefined" or "null"
+ * placeholder, as absent: `reduxDevtools(store, undefined)` or
+ * `{ discriminator: undefined }`.
  */
 function normalizeOptionalArg(arg: any) {
   if (!arg) return null;
@@ -77,42 +77,147 @@ function normalizeOptionalArg(arg: any) {
   return arg;
 }
 
+function identifier(name: string) {
+  return { type: 'Identifier', name };
+}
+
+function nameProperty(value: any) {
+  return {
+    type: 'ObjectProperty',
+    computed: false,
+    shorthand: false,
+    key: identifier('name'),
+    value,
+  };
+}
+
 /**
- * Builds the options object passed to devtools(): the caller's options with the
- * inferred "name" appended, so that the derived store name always wins.
+ * Matches the "discriminator" property of an options object literal. It is
+ * consumed by the plugin to build the store name and not forwarded to devtools().
+ */
+function isDiscriminatorProperty(property: any) {
+  if (property.type !== 'ObjectProperty' || property.computed) return false;
+
+  return (
+    (property.key.type === 'Identifier' &&
+      property.key.name === 'discriminator') ||
+    (property.key.type === 'StringLiteral' &&
+      property.key.value === 'discriminator')
+  );
+}
+
+/**
+ * Handles options whose "discriminator" is only known at runtime, by
+ * destructuring them in place:
+ * `(({ discriminator, ...options } = {}) => ({ ...options, name: ... }))(sharedOptions)`.
+ */
+function buildRuntimeDevtoolsOptions(
+  storeName: string | null,
+  optionsArg: any,
+) {
+  const body = storeName
+    ? {
+        type: 'ObjectExpression',
+        properties: [
+          { type: 'SpreadElement', argument: identifier('options') },
+          nameProperty({
+            type: 'ConditionalExpression',
+            test: {
+              type: 'BinaryExpression',
+              operator: '==',
+              left: identifier('discriminator'),
+              right: { type: 'NullLiteral' },
+            },
+            consequent: { type: 'StringLiteral', value: storeName },
+            alternate: buildStoreNameExpression(
+              storeName,
+              identifier('discriminator'),
+            ),
+          }),
+        ],
+      }
+    : identifier('options');
+
+  return {
+    type: 'CallExpression',
+    callee: {
+      type: 'ArrowFunctionExpression',
+      params: [
+        {
+          type: 'AssignmentPattern',
+          left: {
+            type: 'ObjectPattern',
+            properties: [
+              {
+                type: 'ObjectProperty',
+                computed: false,
+                shorthand: true,
+                key: identifier('discriminator'),
+                value: identifier('discriminator'),
+              },
+              { type: 'RestElement', argument: identifier('options') },
+            ],
+          },
+          right: { type: 'ObjectExpression', properties: [] },
+        },
+      ],
+      body,
+      expression: true,
+    },
+    arguments: [optionsArg],
+  };
+}
+
+/**
+ * Builds the options object passed to devtools(): the caller's options without
+ * "discriminator", with the inferred "name" appended, so that the derived store
+ * name always wins.
  *
- * Object literals are merged property by property, keeping the output readable;
- * any other expression is spread at runtime.
+ * Object literals are rewritten property by property, keeping the output readable;
+ * any other expression, including a literal with spread elements, is destructured
+ * at runtime, since its "discriminator" is only known then.
  *
  * Returns null when there is nothing to pass, in which case devtools() is called
  * with the state creator alone.
  */
-function buildDevtoolsOptions(
-  storeName: string | null,
-  discriminatorArg: any,
-  optionsArg: any,
-) {
-  if (!storeName) {
-    return optionsArg ?? null;
+function buildDevtoolsOptions(storeName: string | null, optionsArg: any) {
+  if (!optionsArg) {
+    return storeName
+      ? {
+          type: 'ObjectExpression',
+          properties: [nameProperty(buildStoreNameExpression(storeName, null))],
+        }
+      : null;
   }
 
-  const inheritedProperties = !optionsArg
-    ? []
-    : optionsArg.type === 'ObjectExpression'
-      ? optionsArg.properties
-      : [{ type: 'SpreadElement', argument: optionsArg }];
+  const isStaticLiteral =
+    optionsArg.type === 'ObjectExpression' &&
+    !optionsArg.properties.some(
+      (property: any) => property.type === 'SpreadElement',
+    );
+
+  if (!isStaticLiteral) {
+    return buildRuntimeDevtoolsOptions(storeName, optionsArg);
+  }
+
+  const discriminatorArg = normalizeOptionalArg(
+    optionsArg.properties.find(isDiscriminatorProperty)?.value,
+  );
+  const forwardedProperties = optionsArg.properties.filter(
+    (property: any) => !isDiscriminatorProperty(property),
+  );
+
+  if (!storeName) {
+    return forwardedProperties.length
+      ? { type: 'ObjectExpression', properties: forwardedProperties }
+      : null;
+  }
 
   return {
     type: 'ObjectExpression',
     properties: [
-      ...inheritedProperties,
-      {
-        type: 'ObjectProperty',
-        computed: false,
-        shorthand: false,
-        key: { type: 'Identifier', name: 'name' },
-        value: buildStoreNameExpression(storeName, discriminatorArg),
-      },
+      ...forwardedProperties,
+      nameProperty(buildStoreNameExpression(storeName, discriminatorArg)),
     ],
   };
 }
@@ -143,10 +248,21 @@ export function zustandDevtoolsPlugin(): Plugin {
             return {
               visitor: {
                 CallExpression(path: any) {
-                  // Match: reduxDevtools(create<T>()(stateCreator), discriminator?, options?)
+                  // Match: reduxDevtools(create<T>()(stateCreator), options?)
                   if (
                     path.node.callee?.type !== 'Identifier' ||
                     path.node.callee.name !== 'reduxDevtools'
+                  ) {
+                    return;
+                  }
+
+                  // Leave the former positional form, reduxDevtools(store, 'Left', options),
+                  // untransformed, so that it fails the build instead of spreading a string.
+                  const [, optionsNode, ...extraArgs] = path.node.arguments;
+                  if (
+                    extraArgs.length ||
+                    optionsNode?.type === 'StringLiteral' ||
+                    optionsNode?.type === 'TemplateLiteral'
                   ) {
                     return;
                   }
@@ -163,18 +279,9 @@ export function zustandDevtoolsPlugin(): Plugin {
                   const stateCreatorArgs = outerArg.arguments;
                   if (!stateCreatorArgs?.length) return;
 
-                  const storeName = getStoreName(path);
-                  const discriminatorArg = normalizeOptionalArg(
-                    path.node.arguments?.[1],
-                  );
-                  const optionsArg = normalizeOptionalArg(
-                    path.node.arguments?.[2],
-                  );
-
                   const devtoolsOptions = buildDevtoolsOptions(
-                    storeName,
-                    discriminatorArg,
-                    optionsArg,
+                    getStoreName(path),
+                    normalizeOptionalArg(optionsNode),
                   );
 
                   const devtoolsArgs = devtoolsOptions

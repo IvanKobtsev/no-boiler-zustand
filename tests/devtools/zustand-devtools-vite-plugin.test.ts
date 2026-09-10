@@ -60,7 +60,7 @@ const transformCases: { name: string; input: string; expected: string }[] = [
 
       export const createMyStore = (prefix: string) => reduxDevtools(
         create()((set) => ({ count: 0 })),
-        prefix
+        { discriminator: prefix }
       );
     `,
     expected: `
@@ -145,7 +145,7 @@ const transformCases: { name: string; input: string; expected: string }[] = [
 
       export const useMyStore = reduxDevtools(
         create()((set) => ({ count: 0 })),
-        'Left'
+        { discriminator: 'Left' }
       );
     `,
     expected: `
@@ -165,7 +165,7 @@ const transformCases: { name: string; input: string; expected: string }[] = [
 
       export const useMyStore = reduxDevtools(
         create()((set) => ({ count: 0 })),
-        getPanelId()
+        { discriminator: getPanelId() }
       );
     `,
     expected: `
@@ -180,15 +180,14 @@ const transformCases: { name: string; input: string; expected: string }[] = [
     `,
   },
   {
-    name: 'merges literal options with the inferred name',
+    name: 'merges literal options with the inferred name and drops the discriminator',
     input: `
       import { create } from 'zustand';
       import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
 
       export const useMyStore = reduxDevtools(
         create()((set) => ({ count: 0 })),
-        'Left',
-        { trace: true, anonymousActionType: 'unknown' }
+        { trace: true, discriminator: 'Left', anonymousActionType: 'unknown' }
       );
     `,
     expected: `
@@ -205,15 +204,44 @@ const transformCases: { name: string; input: string; expected: string }[] = [
     `,
   },
   {
-    name: 'skips an explicitly undefined discriminator when options are passed',
+    name: 'keeps nested literal options intact',
     input: `
       import { create } from 'zustand';
       import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
 
       export const useMyStore = reduxDevtools(
         create()((set) => ({ count: 0 })),
-        undefined,
-        { trace: true }
+        {
+          discriminator: 'Left',
+          serialize: { options: { map: true, set: true } },
+          actionsDenylist: ['reset', 'tick'],
+          enabled: import.meta.env.DEV,
+        }
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export const useMyStore = create()(
+        devtools((set) => ({ count: 0 }), {
+          serialize: { options: { map: true, set: true } },
+          actionsDenylist: ['reset', 'tick'],
+          enabled: import.meta.env.DEV,
+          name: '[Left] MyStore',
+        }),
+      );
+    `,
+  },
+  {
+    name: 'ignores an explicitly undefined discriminator',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export const useMyStore = reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        { discriminator: undefined, trace: true }
       );
     `,
     expected: `
@@ -226,14 +254,13 @@ const transformCases: { name: string; input: string; expected: string }[] = [
     `,
   },
   {
-    name: 'spreads options which are not an object literal',
+    name: 'destructures options which are not an object literal at runtime',
     input: `
       import { create } from 'zustand';
       import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
 
       export const useMyStore = reduxDevtools(
         create()((set) => ({ count: 0 })),
-        'Left',
         sharedDevtoolsOptions
       );
     `,
@@ -242,23 +269,51 @@ const transformCases: { name: string; input: string; expected: string }[] = [
       import { devtools } from 'zustand/middleware';
 
       export const useMyStore = create()(
-        devtools((set) => ({ count: 0 }), {
-          ...sharedDevtoolsOptions,
-          name: '[Left] MyStore',
-        }),
+        devtools(
+          (set) => ({ count: 0 }),
+          (({ discriminator, ...options } = {}) => ({
+            ...options,
+            name: discriminator == null ? 'MyStore' : '[' + discriminator + '] MyStore',
+          }))(sharedDevtoolsOptions),
+        ),
       );
     `,
   },
   {
-    name: 'passes options through when the store is not assigned to a variable',
+    name: 'destructures an object literal with spread elements at runtime',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export const useMyStore = reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        { ...sharedDevtoolsOptions, trace: true }
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export const useMyStore = create()(
+        devtools(
+          (set) => ({ count: 0 }),
+          (({ discriminator, ...options } = {}) => ({
+            ...options,
+            name: discriminator == null ? 'MyStore' : '[' + discriminator + '] MyStore',
+          }))({ ...sharedDevtoolsOptions, trace: true }),
+        ),
+      );
+    `,
+  },
+  {
+    name: 'passes options without the discriminator when the store is not assigned to a variable',
     input: `
       import { create } from 'zustand';
       import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
 
       export default reduxDevtools(
         create()((set) => ({ count: 0 })),
-        undefined,
-        { trace: true }
+        { discriminator: 'Left', trace: true }
       );
     `,
     expected: `
@@ -268,6 +323,47 @@ const transformCases: { name: string; input: string; expected: string }[] = [
       export default create()(
         devtools((set) => ({ count: 0 }), { trace: true }),
       );
+    `,
+  },
+  {
+    name: 'strips the discriminator from runtime options when the store is not assigned to a variable',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export default reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        sharedDevtoolsOptions
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export default create()(
+        devtools(
+          (set) => ({ count: 0 }),
+          (({ discriminator, ...options } = {}) => options)(sharedDevtoolsOptions),
+        ),
+      );
+    `,
+  },
+  {
+    name: 'omits the devtools options when only a discriminator is left for an unassigned store',
+    input: `
+      import { create } from 'zustand';
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      export default reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        { discriminator: 'Left' }
+      );
+    `,
+    expected: `
+      import { create } from 'zustand';
+      import { devtools } from 'zustand/middleware';
+
+      export default create()(devtools((set) => ({ count: 0 })));
     `,
   },
   {
@@ -418,6 +514,26 @@ const rejectedCases: { name: string; input: string }[] = [
       import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
 
       const result = reduxDevtools(create<State>()());
+    `,
+  },
+  {
+    name: 'a reduxDevtools call with a positional string discriminator',
+    input: `
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      const useStore = reduxDevtools(create()((set) => ({ count: 0 })), 'Left');
+    `,
+  },
+  {
+    name: 'a reduxDevtools call with more than two arguments',
+    input: `
+      import { reduxDevtools } from 'helpers/zustand/devtools/reduxDevtools';
+
+      const useStore = reduxDevtools(
+        create()((set) => ({ count: 0 })),
+        undefined,
+        { trace: true },
+      );
     `,
   },
 ];

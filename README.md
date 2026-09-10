@@ -115,19 +115,18 @@ const useCounterStore = reduxDevtools(
 );
 ```
 
-The plugin wraps the state creator with Zustand's `devtools` middleware and derives `CounterStore` from the variable name. Pass a second argument such as `reduxDevtools(creator, 'Sidebar')` to produce `[Sidebar] CounterStore`.
+The plugin wraps the state creator with Zustand's `devtools` middleware and derives `CounterStore` from the variable name.
 
-A third argument forwards any other `devtools` option:
+A second argument forwards any other `devtools` option, plus an optional `discriminator` telling apart several instances of the same store:
 
 ```ts
 const useCounterStore = reduxDevtools(
   create<CounterState>()((set) => ({ count: 0 })),
-  'Sidebar',
-  { trace: true, enabled: import.meta.env.DEV },
+  { discriminator: 'Sidebar', trace: true, enabled: import.meta.env.DEV },
 );
 ```
 
-Object literals are merged into the generated options at build time, any other expression is spread at runtime. `name` is not accepted there, since it is derived from the variable name. Pass `undefined` as the discriminator to use options without one.
+This produces `[Sidebar] CounterStore`; `discriminator` itself is not forwarded to `devtools`. Object literals are merged into the generated options at build time, any other expression is destructured at runtime. `name` is not accepted there, since it is derived from the variable name.
 
 ## Name actions
 
